@@ -1,0 +1,6 @@
+mkdir it-interview-assistant
+cd it-interview-assistant
+mkdir src tests data
+mkdir src/api src/core src/database src/ui
+mkdir data/code_samples
+touch .env .gitignore README.md requirements.txt setup.py
