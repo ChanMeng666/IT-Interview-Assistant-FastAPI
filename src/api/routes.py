@@ -16,43 +16,40 @@ interview_engine = InterviewEngine()
 code_analyzer = CodeAnalyzer()
 tech_explainer = TechExplainer()
 
+
 @router.post("/interview/start")
 async def start_interview(
         request: dict,
         db: Session = Depends(get_db)
 ):
+    """开始新的面试会话"""
     try:
-        position_level = request.get("position_level", "初级")
-        technologies = request.get("technologies", ["Python"])
+        if not request.get("candidate_id"):
+            raise HTTPException(status_code=400, detail="candidate_id is required")
 
-        result = await interview_engine.start_interview(position_level, technologies)
-
-        # 创建新的面试会话
-        session_id = str(uuid.uuid4())
-        db_session = DBSession(
-            id=session_id,
-            position_level=position_level,
-            technologies=",".join(technologies)
+        result = await interview_engine.start_interview(
+            candidate_id=request["candidate_id"],
+            position_level=request.get("position_level", "junior"),
+            technologies=request.get("technologies", ["Python"]),
+            db_session=db
         )
-        db.add(db_session)
-        db.commit()
 
-        # 记录第一个问题
-        record = InterviewRecord(
-            id=str(uuid.uuid4()),
-            session_id=session_id,
-            question=result.get("question", "")
-        )
-        db.add(record)
-        db.commit()
+        # 验证返回结果包含所有必需字段
+        required_fields = ["session_id", "question", "difficulty_level", "session_context"]
+        missing_fields = [field for field in required_fields if field not in result]
 
-        return {
-            "session_id": session_id,
-            "question": result.get("question", "让我们开始面试。请做个自我介绍。"),
-            "session_context": result.get("session_context", [])
-        }
+        if missing_fields:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Missing required fields in response: {', '.join(missing_fields)}"
+            )
+
+        return result
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        db.rollback()
+        print(f"Error in start_interview route: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/interview/answer/{session_id}")

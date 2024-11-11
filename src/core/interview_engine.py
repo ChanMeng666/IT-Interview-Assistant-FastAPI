@@ -1,3 +1,5 @@
+import uuid
+
 import google.generativeai as genai
 from typing import List, Dict, Optional
 import json
@@ -217,24 +219,25 @@ class InterviewEngine:
             db_session
     ) -> Dict:
         """开始新的面试会话"""
-        # 获取候选人信息
-        candidate = db_session.query(Candidate).get(candidate_id)
-        if not candidate:
-            raise ValueError("Candidate not found")
-
-        # 计算初始难度
-        self.current_difficulty = self._calculate_initial_difficulty(candidate)
-
-        # 根据技术栈和难度生成初始问题
-        initial_topic = technologies[0]  # 从第一个技术开始
-        question_prompt = self._create_adaptive_question(initial_topic, self.current_difficulty)
-
         try:
+            # 获取候选人信息
+            candidate = db_session.query(Candidate).get(candidate_id)
+            if not candidate:
+                raise ValueError("Candidate not found")
+
+            # 计算初始难度
+            self.current_difficulty = self._calculate_initial_difficulty(candidate)
+
+            # 根据技术栈和难度生成初始问题
+            initial_topic = technologies[0]  # 从第一个技术开始
+            question_prompt = self._create_adaptive_question(initial_topic, self.current_difficulty)
+
             response = await self.model.generate_content_async(question_prompt)
             result = json.loads(response.text)
 
-            # 创建新的面试会话
+            # 创建新的面试会话记录
             interview_session = Session(
+                id=str(uuid.uuid4()),  # 确保设置了ID
                 candidate_id=candidate_id,
                 position_level=position_level,
                 technologies=",".join(technologies),
@@ -259,8 +262,9 @@ class InterviewEngine:
                 }
             }]
 
+            # 确保返回所有必需的字段
             return {
-                "session_id": interview_session.id,
+                "session_id": interview_session.id,  # 使用新创建的会话ID
                 "question": result["question"],
                 "difficulty_level": self.current_difficulty,
                 "session_context": self.context
@@ -268,6 +272,7 @@ class InterviewEngine:
 
         except Exception as e:
             print(f"Error in start_interview: {e}")
+            db_session.rollback()  # 确保在出错时回滚数据库事务
             raise
 
     async def process_answer(self, answer: str, db_session) -> Dict:

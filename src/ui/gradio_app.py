@@ -41,6 +41,9 @@ async def start_interview_with_candidate(
 ) -> List[Dict]:
     """使用候选人信息开始面试"""
     try:
+        if not candidate_id.strip():
+            return [{"role": "assistant", "content": "请输入候选人ID"}]
+
         tech_list = [t.strip() for t in technologies.split(",")]
 
         async with httpx.AsyncClient() as client:
@@ -50,9 +53,19 @@ async def start_interview_with_candidate(
                     "candidate_id": candidate_id,
                     "position_level": position_level,
                     "technologies": tech_list
-                }
+                },
+                timeout=30.0  # 增加超时时间
             )
+
+            if response.status_code != 200:
+                error_detail = response.json().get('detail', '未知错误')
+                return [{"role": "assistant", "content": f"启动面试失败: {error_detail}"}]
+
             result = response.json()
+
+            # 验证响应中包含必需的字段
+            if not all(key in result for key in ["session_id", "question", "difficulty_level"]):
+                return [{"role": "assistant", "content": "服务器返回的数据格式不正确"}]
 
             # 更新当前会话
             current_session["id"] = result["session_id"]
@@ -64,9 +77,14 @@ async def start_interview_with_candidate(
             )
 
             return [{"role": "assistant", "content": question_with_info}]
-    except Exception as e:
-        return [{"role": "assistant", "content": f"启动面试失败: {str(e)}"}]
 
+    except httpx.TimeoutError:
+        return [{"role": "assistant", "content": "请求超时，请重试"}]
+    except httpx.RequestError as e:
+        return [{"role": "assistant", "content": f"网络请求错误: {str(e)}"}]
+    except Exception as e:
+        print(f"Error in start_interview_with_candidate: {e}")
+        return [{"role": "assistant", "content": f"启动面试时发生错误: {str(e)}"}]
 
 
 async def start_new_interview(position_level: str, technologies: str) -> List[Dict]:

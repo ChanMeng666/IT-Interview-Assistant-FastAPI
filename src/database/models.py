@@ -56,5 +56,11 @@ class Candidate(Base):
 
 # 数据库初始化函数
 def init_db():
-    engine = create_engine(settings.DATABASE_URL)
-    Base.metadata.create_all(engine)
+    """初始化数据库"""
+    try:
+        engine = create_engine(settings.DATABASE_URL)
+        Base.metadata.create_all(engine)
+        logging.info("Database initialized successfully")
+    except Exception as e:
+        logging.error(f"Error initializing database: {e}")
+        raise
