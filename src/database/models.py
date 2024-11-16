@@ -3,6 +3,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from src.config import settings
+import logging
+import os
 
 Base = declarative_base()
 
@@ -58,9 +60,25 @@ class Candidate(Base):
 def init_db():
     """初始化数据库"""
     try:
+        # 获取数据库文件路径
+        db_path = settings.DATABASE_URL.replace('sqlite:///', '')
+
+        # 如果数据库文件存在，则删除它
+        if os.path.exists(db_path) and db_path != ':memory:':
+            os.remove(db_path)
+            logging.info(f"Removed existing database file: {db_path}")
+
+        # 创建数据库引擎
         engine = create_engine(settings.DATABASE_URL)
+
+        # 删除所有现有表（以防万一）
+        Base.metadata.drop_all(engine)
+        logging.info("Dropped all existing tables")
+
+        # 创建所有表
         Base.metadata.create_all(engine)
-        logging.info("Database initialized successfully")
+        logging.info("Database initialized successfully with new schema")
+
     except Exception as e:
         logging.error(f"Error initializing database: {e}")
         raise
